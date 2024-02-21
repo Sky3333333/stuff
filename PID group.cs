@@ -3,7 +3,8 @@ const double TimeStep = 1.0 / 6.0; // Update10 is 1/6th a second
 PID _pid;
 IMyMotorStator _rotor;
 double _desiredAngle = 0;
-
+IMyBlockGroup group;
+List<IMyTerminalBlock> blocks;
 
 Program()
 {
@@ -24,10 +25,6 @@ Program()
     }
     Echo($"{group.Name}:");
     group.GetBlocks(blocks);
-    foreach (var block in blocks)
-    {
-        Echo($"- {block.CustomName}");
-    }
 }
 
 void Main(string arg, UpdateType updateSource)
@@ -36,6 +33,11 @@ void Main(string arg, UpdateType updateSource)
     {
         Echo($"ERROR: No rotor named '{RotorName}'!");
         return;
+    }
+
+    foreach (var block in blocks)
+    {
+        Echo($"- {block.CustomName}");
     }
     
     if (!string.IsNullOrEmpty(arg))
@@ -65,7 +67,7 @@ void Main(string arg, UpdateType updateSource)
         _rotor.TargetVelocityRPM = (float)_pid.Control(error);
     }
     
-    Echo($"Desired angle: {_desiredAngle}\nCurrent angle: {_rotor.Angle:n2}");
+    //Echo($"Desired angle: {_desiredAngle}\nCurrent angle: {_rotor.Angle:n2}");
 }
 
 public class PID
