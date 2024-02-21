@@ -1,43 +1,41 @@
-const string RotorName = "Rotor"; // Name of the rotor to control
 const double TimeStep = 1.0 / 6.0; // Update10 is 1/6th a second
 PID _pid;
-IMyMotorStator _rotor;
-double _desiredAngle = 0;
-IMyBlockGroup group;
-List<IMyTerminalBlock> blocks;
+List<IMyMotorStator> _rotors = new List<IMyMotorStator>();
+Dictionary<IMyMotorStator, bool> _invertMap = new Dictionary<IMyMotorStator, bool>();
+double _desiredAngle = 0; // Declare _desiredAngle at the class level
 
 Program()
 {
     Runtime.UpdateFrequency = UpdateFrequency.Update10;
     
     // This is the simplest PID controller, you can change the gains if you'd like
-    _pid = new PID(10, 0, 0, TimeStep);
+    _pid = new PID(1, 0, 0, TimeStep);
     
-    // Grab our rotor
-    _rotor = GridTerminalSystem.GetBlockWithName(RotorName) as IMyMotorStator;
-
-    IMyBlockGroup group = GridTerminalSystem.GetBlockGroupWithName("A Group");
-    List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
+    // Grab our rotor group
+    IMyBlockGroup group = GridTerminalSystem.GetBlockGroupWithName("Rotors PID");
     if (group == null)
     {
         Echo("Group not found");
         return;
     }
-    Echo($"{group.Name}:");
+    List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
     group.GetBlocks(blocks);
-}
-
-void Main(string arg, UpdateType updateSource)
-{
-    if (_rotor == null)
-    {
-        Echo($"ERROR: No rotor named '{RotorName}'!");
-        return;
-    }
-
     foreach (var block in blocks)
     {
-        Echo($"- {block.CustomName}");
+        if (block is IMyMotorStator)
+        {
+            _rotors.Add(block as IMyMotorStator);
+            _invertMap.Add(block as IMyMotorStator, (block as IMyMotorStator).CustomName.ToLower().Contains("inv"));
+        }
+    }
+}void Main(string arg, UpdateType updateSource)
+{
+    Echo("Debug Info:");
+
+    if (_rotors.Count == 0)
+    {
+        Echo("ERROR: No rotors found in group");
+        return;
     }
     
     if (!string.IsNullOrEmpty(arg))
@@ -45,30 +43,63 @@ void Main(string arg, UpdateType updateSource)
         double val;
         if (double.TryParse(arg, out val))
         {
-            // Set desired angle
-            _desiredAngle = val/360*2*Math.PI;
+            _desiredAngle = val; // Set _desiredAngle here
+            
+            foreach (var rotor in _rotors)
+            {
+                double desiredAngle = val;
+                
+                // Adjust desired angle based on rotor inversion
+                if (_invertMap[rotor])
+                {
+                    desiredAngle = 360 - val;
+                }
+                
+                // Compute error
+                double currentAngle = rotor.Angle * 180 / Math.PI;
+                double error = (desiredAngle - currentAngle) % 360;
+                if (error > 180)
+                {
+                    error -= 360;
+                }
+                else if (error < -180)
+                {
+                    error += 360;
+                }
+                
+                rotor.TargetVelocityRPM = (float)_pid.Control(error);
+
+                // Debugging info
+                Echo($"Rotor '{rotor.CustomName}': Current Angle: {currentAngle}, Desired Angle: {desiredAngle}, Error: {error}");
+            }
         }
     }
     
     if ((updateSource & UpdateType.Update10) != 0)
     {
-        // Compute our error
-        double error = _desiredAngle - (_rotor.Angle);
-        if (error>Math.PI)
+        foreach (var rotor in _rotors)
         {
-            error = -1*(Math.PI*2-error);
+            double currentAngle = rotor.Angle * 180 / Math.PI;
+            double error = _invertMap[rotor] ? 360 - _desiredAngle : _desiredAngle;
+            error -= currentAngle;
+            if (error > 180)
+            {
+                error -= 360;
+            }
+            if (error < -180)
+            {
+                error += 360;
+            }
+
+            rotor.TargetVelocityRPM = (float)_pid.Control(error);
+
+            // Debugging info
+            Echo($"Rotor '{rotor.CustomName}': Current Angle: {currentAngle}, Desired Angle: {_desiredAngle}, Error: {error}");
         }
-        if (error<Math.PI*-1)
-        {
-            error = (Math.PI*2+error);
-        }
-        
-        // Set rotor velocity to the result of our PID output
-        _rotor.TargetVelocityRPM = (float)_pid.Control(error);
     }
-    
-    //Echo($"Desired angle: {_desiredAngle}\nCurrent angle: {_rotor.Angle:n2}");
 }
+
+
 
 public class PID
 {
