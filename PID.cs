@@ -1,8 +1,8 @@
-const string PistonName = "Rotor"; // Name of the piston to control
+const string RotorName = "Rotor"; // Name of the rotor to control
 const double TimeStep = 1.0 / 6.0; // Update10 is 1/6th a second
 PID _pid;
-IMyMotorStator _piston;
-double _desiredExtension = 0;
+IMyMotorStator _rotor;
+double _desiredAngle = 0;
 Program()
 {
     Runtime.UpdateFrequency = UpdateFrequency.Update10;
@@ -10,15 +10,15 @@ Program()
     // This is the simplest PID controller, you can change the gains if you'd like
     _pid = new PID(10, 0, 0, TimeStep);
     
-    // Grab our piston
-    _piston = GridTerminalSystem.GetBlockWithName(PistonName) as IMyMotorStator;
+    // Grab our rotor
+    _rotor = GridTerminalSystem.GetBlockWithName(RotorName) as IMyMotorStator;
 }
 
 void Main(string arg, UpdateType updateSource)
 {
-    if (_piston == null)
+    if (_rotor == null)
     {
-        Echo($"ERROR: No piston named '{PistonName}'!");
+        Echo($"ERROR: No rotor named '{RotorName}'!");
         return;
     }
     
@@ -27,15 +27,15 @@ void Main(string arg, UpdateType updateSource)
         double val;
         if (double.TryParse(arg, out val))
         {
-            // Set desired extension
-            _desiredExtension = val/360*2*Math.PI;
+            // Set desired angle
+            _desiredAngle = val/360*2*Math.PI;
         }
     }
     
     if ((updateSource & UpdateType.Update10) != 0)
     {
         // Compute our error
-        double error = _desiredExtension - (_piston.Angle);
+        double error = _desiredAngle - (_rotor.Angle);
         if (error>Math.PI)
         {
             error = -1*(Math.PI*2-error);
@@ -45,11 +45,11 @@ void Main(string arg, UpdateType updateSource)
             error = (Math.PI*2+error);
         }
         
-        // Set piston velocity to the result of our PID output
-        _piston.TargetVelocityRPM = (float)_pid.Control(error);
+        // Set rotor velocity to the result of our PID output
+        _rotor.TargetVelocityRPM = (float)_pid.Control(error);
     }
     
-    Echo($"Desired extension: {_desiredExtension}\nCurrent extension: {_piston.Angle:n2}");
+    Echo($"Desired angle: {_desiredAngle}\nCurrent angle: {_rotor.Angle:n2}");
 }
 
 public class PID
